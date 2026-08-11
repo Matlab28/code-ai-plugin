@@ -1,45 +1,152 @@
-# gr-plugin
+# CodeAI Reviewer
 
-![Build](https://github.com/Matlab28/gr-plugin/workflows/Build/badge.svg)
-[![Version](https://img.shields.io/jetbrains/plugin/v/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
-[![Downloads](https://img.shields.io/jetbrains/plugin/d/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
+An IntelliJ IDEA plugin that reviews uncommitted Git changes before you commit them. It collects added and modified files through IntelliJ's VCS APIs, filters sensitive content, sends a bounded diff to an AI reviewer, and presents actionable findings with source navigation.
 
-## Template ToDo list
-- [x] Create a new [IntelliJ Platform Plugin Template][template] project.
-- [ ] Get familiar with the [template documentation][template].
-- [ ] Adjust the [group](./gradle.properties), as well as the [id](./src/main/resources/META-INF/plugin.xml), [name](./src/main/resources/META-INF/plugin.xml), and [sources package](./src/main/kotlin).
-- [ ] Adjust the plugin [description](./src/main/resources/META-INF/plugin.xml) (see [Tips][docs:plugin-description]) and this README to describe what your plugin does.
-- [ ] Review the [Legal Agreements](https://plugins.jetbrains.com/docs/marketplace/legal-agreements.html?from=IJPluginTemplate).
-- [ ] [Publish a plugin manually](https://plugins.jetbrains.com/docs/intellij/publishing-plugin.html?from=IJPluginTemplate) for the first time.
-- [ ] Set the `MARKETPLACE_ID` in the above README badges. You can obtain it once the plugin is published to JetBrains Marketplace.
-- [ ] Set the [Plugin Signing](https://plugins.jetbrains.com/docs/intellij/plugin-signing.html?from=IJPluginTemplate) related [secrets](https://github.com/JetBrains/intellij-platform-plugin-template#environment-variables).
-- [ ] Set the [Deployment Token](https://plugins.jetbrains.com/docs/marketplace/plugin-upload.html?from=IJPluginTemplate).
-- [ ] Click the <kbd>Watch</kbd> button on the top of the [IntelliJ Platform Plugin Template][template] to be notified about releases containing new features and fixes.
+## Features
 
-This Fancy IntelliJ Platform Plugin is going to be your implementation of the brilliant ideas that you have.
+- **Review Changes** in the CodeAI Reviewer tool window or **Tools → CodeAI → Review Changes**
+- Reviews uncommitted added and modified files without shelling out to Git
+- Runs network and review work in a cancellable background task
+- Groups findings by file and navigates directly to the reported line
+- Filters secrets, credentials, private keys, build outputs, and `.codeaiignore` patterns
+- Stores API tokens in IntelliJ PasswordSafe, never ordinary settings XML
+- Supports three provider modes:
+  - `OPENAI_COMPATIBLE`: OpenRouter by default, or another `/v1/chat/completions` service
+  - `STRUCTURED_BACKEND`: the production `/api/v1/reviews` contract
+  - `LEGACY_CODEAI`: the existing Spring Boot `ReviewRequestDTO`/`ReviewResponse` contract
 
-## Installation
+## Requirements
 
-- Using the IDE built-in plugin system:
+- IntelliJ IDEA 2025.2.x
+- A Git-backed project with uncommitted changes
+- JDK 21 for building from source
+- An OpenRouter API key, or another configured AI service
 
-  <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>Marketplace</kbd> > <kbd>Search for "gr-plugin"</kbd> >
-  <kbd>Install</kbd>
+## Install the ready-to-use build
 
-- Using JetBrains Marketplace:
+1. Run `./gradlew buildPlugin`, or use the already generated ZIP in `build/distributions/`.
+2. In IntelliJ, open **Settings → Plugins**.
+3. Choose the gear menu, then **Install Plugin from Disk…**.
+4. Select the ZIP and restart the IDE.
+5. Open **Settings → Tools → CodeAI Reviewer**.
 
-  Go to [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID) and install it by clicking the <kbd>Install to ...</kbd> button in case your IDE is running.
+## Recommended launch setup: OpenRouter
 
-  You can also download the [latest release](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID/versions) from JetBrains Marketplace and install it manually using
-  <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> > <kbd>Install plugin from disk...</kbd>
+The published plugin defaults to OpenRouter, so users do not need to install or run a local model. Every user supplies their own API key; no provider secret is embedded in the plugin.
 
-- Manually:
+1. Create an API key at [OpenRouter](https://openrouter.ai/keys).
+2. In CodeAI Reviewer settings choose `OPENAI_COMPATIBLE`.
+3. Keep **Server URL** as `https://openrouter.ai/api`.
+4. Keep **Model** as `openrouter/auto`, or enter another OpenRouter model slug.
+5. Paste the API key. It is stored in JetBrains PasswordSafe.
+6. Use **Test Connection**, then review your changes.
 
-  Download the [latest release](https://github.com/Matlab28/gr-plugin/releases/latest) and install it manually using
-  <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> > <kbd>Install plugin from disk...</kbd>
+The plugin also accepts other OpenAI-compatible cloud endpoints. Configure the server root without the final `/v1/chat/completions`; the plugin appends that path.
 
+## Spring Boot backend mode
 
----
-Plugin based on the [IntelliJ Platform Plugin Template][template].
+Choose `STRUCTURED_BACKEND` and set the server root, for example `http://localhost:8080`. The plugin sends:
 
-[template]: https://github.com/JetBrains/intellij-platform-plugin-template
-[docs:plugin-description]: https://plugins.jetbrains.com/docs/intellij/plugin-user-experience.html#plugin-description-and-presentation
+```http
+POST /api/v1/reviews
+Content-Type: application/json
+Authorization: Bearer <optional-token>
+```
+
+```json
+{
+  "project": { "name": "demo", "language": "JAVA" },
+  "reviewScope": "UNCOMMITTED_CHANGES",
+  "files": [{
+    "path": "src/main/java/example/App.java",
+    "changeType": "MODIFIED",
+    "diff": "--- a/...",
+    "context": "package example; ..."
+  }]
+}
+```
+
+Expected response:
+
+```json
+{
+  "reviewId": "uuid",
+  "summary": {
+    "filesReviewed": 1,
+    "issues": 1,
+    "critical": 0,
+    "high": 1,
+    "medium": 0,
+    "low": 0
+  },
+  "findings": [{
+    "id": "finding-1",
+    "file": "src/main/java/example/App.java",
+    "startLine": 18,
+    "endLine": 18,
+    "severity": "HIGH",
+    "category": "SECURITY",
+    "title": "SQL injection",
+    "description": "User input is concatenated into SQL.",
+    "suggestion": "Use a parameterized query.",
+    "confidence": 0.98
+  }]
+}
+```
+
+The current local `CodeAi` project does not yet expose this active endpoint: its old `/api/review` controller is commented out, while `/gemini/review` currently reviews hard-coded sample code. Enable/fix the old controller to use `LEGACY_CODEAI`, or add the structured endpoint above. OpenRouter mode works independently of that backend.
+
+## `.codeaiignore`
+
+Place `.codeaiignore` in the reviewed project root. Basic gitignore-style glob patterns are supported:
+
+```gitignore
+target/
+build/
+**/generated/**
+db/migration/
+*.pem
+```
+
+The plugin always excludes common environment files, keys, credential files, generated binaries, and likely secrets. It never logs submitted source.
+
+## Development
+
+```bash
+./gradlew runIde
+./gradlew test
+./gradlew buildPlugin
+./gradlew verifyPlugin
+```
+
+The installable artifact is created under `build/distributions/`.
+
+## JetBrains Marketplace
+
+Upload the generated **ZIP**, not the inner JAR:
+
+```text
+build/distributions/CodeAI Reviewer-1.0.0.zip
+```
+
+For the first release, sign in at [JetBrains Marketplace: Upload Plugin](https://plugins.jetbrains.com/plugin/add#intellij), create/select your vendor profile, accept the Developer Agreement, and complete the form using [MARKETPLACE.md](MARKETPLACE.md). After the first manual upload, later versions can be published by the included GitHub Actions release workflow using Marketplace and signing secrets.
+
+## Architecture
+
+The plugin stays deliberately thin:
+
+```text
+IntelliJ VCS → privacy filters → bounded diff/context → selected API client
+                                                         ↓
+source navigation ← grouped tool-window findings ← structured response
+```
+
+Prompt/RAG policy, persistence, billing, and organizational rules belong in the Spring Boot backend. The direct OpenAI-compatible mode is intended for private local use and development.
+
+## Privacy and security
+
+Reviewing code sends selected diffs and limited source context to the configured service. Verify that the chosen URL is trusted. API tokens are stored through PasswordSafe. The included pattern detector reduces accidental disclosure but is not a complete secret scanner.
+
+## License
+
+Add the license appropriate for your distribution before publishing to JetBrains Marketplace.
