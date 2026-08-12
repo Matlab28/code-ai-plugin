@@ -5,6 +5,13 @@ enum class ChangeType { ADDED, MODIFIED, DELETED }
 enum class ReviewSeverity { CRITICAL, HIGH, MEDIUM, LOW, INFO }
 enum class ReviewCategory { BUG, SECURITY, PERFORMANCE, CONCURRENCY, DATABASE, API_DESIGN, MAINTAINABILITY, ERROR_HANDLING, TESTING }
 enum class ReviewStatus { IDLE, COLLECTING_CHANGES, REVIEWING, SUCCESS, ERROR, CANCELLED }
+enum class ReviewMode(val displayName: String, val textResult: Boolean = false) {
+    GENERAL("General"),
+    SECURITY("Security"),
+    PERFORMANCE("Performance"),
+    TESTS("Tests", true),
+    EXPLAIN("Explain", true),
+}
 
 data class ChangedFile(
     val path: String,
@@ -24,6 +31,7 @@ data class ReviewFinding(
     val category: ReviewCategory = ReviewCategory.MAINTAINABILITY,
     val title: String = "Finding",
     val description: String = "",
+    val codeSnippet: String = "",
     val suggestion: String = "",
     val confidence: Double = 1.0,
 )
@@ -41,4 +49,5 @@ data class ReviewResponse(
     val reviewId: String = "",
     val summary: ReviewSummary = ReviewSummary(),
     val findings: List<ReviewFinding> = emptyList(),
+    val markdownExplanation: String = "",
 )

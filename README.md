@@ -4,10 +4,16 @@ An IntelliJ IDEA plugin that reviews uncommitted Git changes before you commit t
 
 ## Features
 
-- **Review Changes** in the CodeAI Reviewer tool window or **Tools → CodeAI → Review Changes**
+- Separate **General**, **Security**, **Performance**, **Tests**, and **Explain** review buttons
+- **Run All** from the CodeAI Reviewer tool window, or **Tools → CodeAI → Review Changes**
 - Reviews uncommitted added and modified files without shelling out to Git
 - Runs network and review work in a cancellable background task
-- Groups findings by file and navigates directly to the reported line
+- Uses a width-aware results view that wraps long content instead of requiring horizontal scrolling
+- Groups findings by file, shows compact severity cards, and navigates directly to the reported line
+- Shows detailed issue cards with code snippets, copy buttons, suggestions, file/line metadata, and severity indicators
+- Renders test recommendations and change explanations in dedicated readable sections
+- Renders AI Markdown as headings, lists, bold, italic, inline code, quotations, and wrapped code blocks
+- Keeps all five **Run All** results available while switching between mode buttons
 - Filters secrets, credentials, private keys, build outputs, and `.codeaiignore` patterns
 - Stores API tokens in IntelliJ PasswordSafe, never ordinary settings XML
 - Supports three provider modes:
@@ -57,6 +63,7 @@ Authorization: Bearer <optional-token>
 {
   "project": { "name": "demo", "language": "JAVA" },
   "reviewScope": "UNCOMMITTED_CHANGES",
+  "reviewType": "GENERAL",
   "files": [{
     "path": "src/main/java/example/App.java",
     "changeType": "MODIFIED",
@@ -126,7 +133,7 @@ The installable artifact is created under `build/distributions/`.
 Upload the generated **ZIP**, not the inner JAR:
 
 ```text
-build/distributions/CodeAI Reviewer-1.0.0.zip
+build/distributions/CodeAI Reviewer-1.2.0.zip
 ```
 
 For the first release, sign in at [JetBrains Marketplace: Upload Plugin](https://plugins.jetbrains.com/plugin/add#intellij), create/select your vendor profile, accept the Developer Agreement, and complete the form using [MARKETPLACE.md](MARKETPLACE.md). After the first manual upload, later versions can be published by the included GitHub Actions release workflow using Marketplace and signing secrets.

@@ -4,7 +4,7 @@
     <vendor email="metleb.abbaszade@gmail.com" url="https://github.com/Matlab28">Matlab Abbaszada</vendor>
     <description><![CDATA[
         <p>Reviews uncommitted Git changes using OpenRouter, another OpenAI-compatible AI service, or a configurable Spring Boot backend.</p>
-        <p>Includes secret filtering, <code>.codeaiignore</code>, structured findings, and source navigation.</p>
+        <p>Includes General, Security, Performance, Tests, and Explain modes; responsive results; secret filtering; <code>.codeaiignore</code>; and source navigation.</p>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>

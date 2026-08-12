@@ -16,12 +16,12 @@ class CodeAiApiClient {
     private val mapper = ObjectMapper()
     private val http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build()
 
-    fun review(projectName: String, files: List<ChangedFile>): ReviewResponse {
+    fun review(projectName: String, files: List<ChangedFile>, mode: ReviewMode): ReviewResponse {
         val s = CodeAiSettings.getInstance().state
         return when (s.providerMode) {
-            ProviderMode.STRUCTURED_BACKEND -> structured(projectName, files)
-            ProviderMode.LEGACY_CODEAI -> legacy(files)
-            ProviderMode.OPENAI_COMPATIBLE -> openAi(files)
+            ProviderMode.STRUCTURED_BACKEND -> structured(projectName, files, mode)
+            ProviderMode.LEGACY_CODEAI -> legacy(files, mode)
+            ProviderMode.OPENAI_COMPATIBLE -> openAi(files, mode)
         }.let(::normalize)
     }
 
@@ -34,39 +34,39 @@ class CodeAiApiClient {
         return "Connection successful (HTTP ${response.statusCode()})"
     }
 
-    private fun structured(projectName: String, files: List<ChangedFile>): ReviewResponse {
+    private fun structured(projectName: String, files: List<ChangedFile>, mode: ReviewMode): ReviewResponse {
         val body = mapOf(
             "project" to mapOf("name" to projectName, "language" to "JAVA"),
             "reviewScope" to "UNCOMMITTED_CHANGES",
+            "reviewType" to mode.name,
             "files" to files.map { mapOf("path" to it.path, "changeType" to it.changeType.name, "diff" to it.diff, "context" to it.context) },
         )
         val root = post("/api/v1/reviews", mapper.writeValueAsString(body))
         val findings = root.path("findings").mapIndexed { index, node -> finding(node, index) }
-        return response(root.path("summary").path("filesReviewed").asInt(files.size), findings, root.path("reviewId").asText())
+        val explanation = root.path("markdownExplanation").asText(root.path("text").asText())
+        return response(root.path("summary").path("filesReviewed").asInt(files.size), findings, root.path("reviewId").asText(), explanation)
     }
 
-    private fun legacy(files: List<ChangedFile>): ReviewResponse {
+    private fun legacy(files: List<ChangedFile>, mode: ReviewMode): ReviewResponse {
         val findings = mutableListOf<ReviewFinding>()
+        val explanations = mutableListOf<String>()
         files.forEach { file ->
-            val root = post("/api/review", mapper.writeValueAsString(mapOf("code" to file.context, "reviewType" to "GENERAL")))
+            val root = post("/api/review", mapper.writeValueAsString(mapOf("code" to file.context, "reviewType" to mode.name)))
             root.path("issues").forEachIndexed { index, issue -> findings += legacyFinding(issue, file.path, index) }
+            root.path("markdownExplanation").asText().takeIf(String::isNotBlank)?.let {
+                explanations += "${file.path}\n\n$it"
+            }
         }
-        return response(files.size, findings)
+        return response(files.size, findings, explanation = explanations.joinToString("\n\n---\n\n"))
     }
 
-    private fun openAi(files: List<ChangedFile>): ReviewResponse {
+    private fun openAi(files: List<ChangedFile>, mode: ReviewMode): ReviewResponse {
         val s = CodeAiSettings.getInstance().state
         if (s.serverUrl.contains("openrouter.ai") && SecureTokenStore.get().isNullOrBlank()) {
             error("OpenRouter API token is missing. Add it in Settings → Tools → CodeAI Reviewer.")
         }
-        val prompt = """
-            Review these uncommitted code changes. Return ONLY a JSON array. Each item must contain:
-            file, startLine, endLine, severity (CRITICAL|HIGH|MEDIUM|LOW|INFO), category
-            (BUG|SECURITY|PERFORMANCE|CONCURRENCY|DATABASE|API_DESIGN|MAINTAINABILITY|ERROR_HANDLING|TESTING),
-            title, description, suggestion, confidence (0..1). Report only actionable issues in changed code.
-
-            ${files.joinToString("\n\n") { "FILE: ${it.path}\n${it.diff}" }}
-        """.trimIndent()
+        val changes = files.joinToString("\n\n") { "FILE: ${it.path}\n${it.diff}" }
+        val prompt = if (mode.textResult) textPrompt(mode, changes) else findingsPrompt(mode, changes)
         val body = mapOf(
             "model" to s.model,
             "temperature" to 0.1,
@@ -77,8 +77,43 @@ class CodeAiApiClient {
         )
         val root = post("/v1/chat/completions", mapper.writeValueAsString(body))
         val content = root.path("choices").path(0).path("message").path("content").asText()
-        val findings = parseFindingsContent(content)
-        return response(files.size, findings)
+        return if (mode.textResult) response(files.size, emptyList(), explanation = content)
+        else response(files.size, parseFindingsContent(content))
+    }
+
+    private fun findingsPrompt(mode: ReviewMode, changes: String): String {
+        val focus = when (mode) {
+            ReviewMode.SECURITY -> "security vulnerabilities, authentication/authorization, injection, secrets, unsafe deserialization, and data exposure"
+            ReviewMode.PERFORMANCE -> "performance bottlenecks, database query efficiency, memory usage, blocking calls, concurrency, and scalability"
+            else -> "correctness, bugs, error handling, API design, maintainability, database usage, and meaningful best practices"
+        }
+        return """
+            Review these uncommitted code changes, focusing on $focus.
+            Return ONLY a JSON array. Each item must contain: file, startLine, endLine,
+            severity (CRITICAL|HIGH|MEDIUM|LOW|INFO), category
+            (BUG|SECURITY|PERFORMANCE|CONCURRENCY|DATABASE|API_DESIGN|MAINTAINABILITY|ERROR_HANDLING|TESTING),
+            title, description, codeSnippet, suggestion, confidence (0..1). The codeSnippet must contain only
+            the small relevant changed-code excerpt. Report only actionable issues in changed code.
+
+            $changes
+        """.trimIndent()
+    }
+
+    private fun textPrompt(mode: ReviewMode, changes: String): String = when (mode) {
+        ReviewMode.TESTS -> """
+            Generate practical unit and integration test recommendations for these uncommitted changes.
+            Organize the response by file and test scenario. Include concise JUnit 5/Mockito code examples where useful,
+            covering happy paths, edge cases, errors, security boundaries, and Spring integration behavior.
+
+            $changes
+        """.trimIndent()
+        ReviewMode.EXPLAIN -> """
+            Explain these uncommitted changes clearly. Organize the response into: Summary, Behavior Changes,
+            File-by-File Explanation, Important Design Decisions, and Risks. Be precise and developer-focused.
+
+            $changes
+        """.trimIndent()
+        else -> error("${mode.name} is not a text review mode")
     }
 
     internal fun parseFindingsContent(content: String): List<ReviewFinding> {
@@ -122,7 +157,8 @@ class CodeAiApiClient {
         id = "legacy-$index", file = n.path("filePath").asText(path), startLine = n.path("lineNumber").asInt(1),
         severity = when (n.path("severity").asText().uppercase()) { "ERROR" -> ReviewSeverity.HIGH; "WARNING" -> ReviewSeverity.MEDIUM; else -> ReviewSeverity.INFO },
         title = n.path("issueDescription").asText("Code review finding").take(100),
-        description = n.path("issueDescription").asText(), suggestion = n.path("suggestion").asText(),
+        description = n.path("issueDescription").asText(), codeSnippet = n.path("codeSnippet").asText(),
+        suggestion = n.path("suggestion").asText(),
     )
 
     private fun finding(n: JsonNode, index: Int) = ReviewFinding(
@@ -131,6 +167,7 @@ class CodeAiApiClient {
         severity = enumValue(n.path("severity").asText(), ReviewSeverity.INFO),
         category = enumValue(n.path("category").asText(), ReviewCategory.MAINTAINABILITY),
         title = n.path("title").asText("Finding"), description = n.path("description").asText(),
+        codeSnippet = n.path("codeSnippet").asText(),
         suggestion = n.path("suggestion").asText(), confidence = n.path("confidence").asDouble(1.0),
     )
 
@@ -139,12 +176,17 @@ class CodeAiApiClient {
     private fun normalize(response: ReviewResponse): ReviewResponse {
         val minimum = CodeAiSettings.getInstance().state.minimumSeverity.ordinal
         val findings = response.findings.filter { it.severity.ordinal <= minimum && it.confidence >= 0.8 }
-        return response(response.summary.filesReviewed, findings, response.reviewId)
+        return response(response.summary.filesReviewed, findings, response.reviewId, response.markdownExplanation)
     }
 
-    private fun response(files: Int, findings: List<ReviewFinding>, id: String = UUID.randomUUID().toString()): ReviewResponse = ReviewResponse(
+    private fun response(
+        files: Int,
+        findings: List<ReviewFinding>,
+        id: String = UUID.randomUUID().toString(),
+        explanation: String = "",
+    ): ReviewResponse = ReviewResponse(
         id, ReviewSummary(files, findings.size, findings.count { it.severity == ReviewSeverity.CRITICAL },
             findings.count { it.severity == ReviewSeverity.HIGH }, findings.count { it.severity == ReviewSeverity.MEDIUM },
-            findings.count { it.severity == ReviewSeverity.LOW }), findings,
+            findings.count { it.severity == ReviewSeverity.LOW }), findings, explanation,
     )
 }

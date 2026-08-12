@@ -10,7 +10,7 @@ class ReviewChangesAction : AnAction() {
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
         ToolWindowManager.getInstance(project).getToolWindow("CodeAI Reviewer")?.show()
-        project.service<ReviewService>().reviewChanges()
+        project.service<ReviewService>().reviewAll()
     }
 
     override fun update(e: AnActionEvent) { e.presentation.isEnabledAndVisible = e.project != null }

@@ -5,14 +5,14 @@
 Upload this distribution archive—not the JAR inside it:
 
 ```text
-build/distributions/CodeAI Reviewer-1.0.0.zip
+build/distributions/CodeAI Reviewer-1.2.0.zip
 ```
 
 ## Suggested form values
 
 - **Plugin for:** IntelliJ Platform
 - **Name:** CodeAI Reviewer
-- **Version:** 1.0.0
+- **Version:** 1.2.0
 - **Vendor:** Matlab Abbaszada
 - **License:** MIT
 - **License URL:** https://github.com/Matlab28/code-ai-plugin/blob/main/LICENSE
@@ -31,7 +31,8 @@ CodeAI Reviewer analyzes added and modified Git changes before they are committe
 
 Features include:
 
-- Review Changes action and dedicated tool window
+- General, Security, Performance, Tests, and Explain review modes
+- Run All action and dedicated responsive tool window
 - OpenRouter BYOK and generic OpenAI-compatible cloud support
 - Optional structured or legacy Spring Boot backend integration
 - API tokens stored through JetBrains PasswordSafe
@@ -39,6 +40,7 @@ Features include:
 - Cancellable background review execution
 - Severity and confidence filtering
 - One-click navigation to the reported source line
+- Detailed issue cards with code snippets, copy controls, suggestions, and responsive mode buttons
 
 The plugin does not provide code completion or silently modify source files. It does not include analytics or telemetry.
 
@@ -47,7 +49,7 @@ The plugin does not provide code completion or silently modify source files. It 
 1. Sign in to JetBrains Marketplace.
 2. Accept the JetBrains Marketplace Developer Agreement.
 3. Create or select the vendor profile.
-4. Upload `CodeAI Reviewer-1.0.0.zip`.
+4. Upload `CodeAI Reviewer-1.2.0.zip`.
 5. Select the MIT license and add the license URL above.
 6. Add the source, issue-tracker, and privacy-policy links.
 7. Review the detected compatibility range.
