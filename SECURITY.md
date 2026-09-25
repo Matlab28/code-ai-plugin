@@ -19,7 +19,7 @@ Please do not report security vulnerabilities in a public GitHub issue, discussi
 
 Report vulnerabilities privately by emailing:
 
-**metleb.abbaszade@gmail.com**
+**mathhllab@gmail.com**
 
 Use the subject:
 
