@@ -13,5 +13,7 @@ class ReviewChangesAction : AnAction() {
         project.service<ReviewService>().reviewAll()
     }
 
-    override fun update(e: AnActionEvent) { e.presentation.isEnabledAndVisible = e.project != null }
+    override fun update(e: AnActionEvent) {
+        e.presentation.isEnabledAndVisible = e.project != null
+    }
 }

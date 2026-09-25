@@ -55,9 +55,9 @@ class CodeAiConfigurable : Configurable {
     override fun isModified(): Boolean {
         val s = CodeAiSettings.getInstance().state
         return mode.selectedItem != s.providerMode || url.text.trim() != s.serverUrl || model.text.trim() != s.model ||
-            severity.selectedItem != s.minimumSeverity || maxFiles.text.toIntOrNull() != s.maximumFiles ||
-            secrets.isSelected != s.detectSecrets || confirmation.isSelected != s.confirmBeforeSending ||
-            String(token.password) != (SecureTokenStore.get() ?: "")
+                severity.selectedItem != s.minimumSeverity || maxFiles.text.toIntOrNull() != s.maximumFiles ||
+                secrets.isSelected != s.detectSecrets || confirmation.isSelected != s.confirmBeforeSending ||
+                String(token.password) != (SecureTokenStore.get() ?: "")
     }
 
     override fun apply() {
@@ -84,5 +84,7 @@ class CodeAiConfigurable : Configurable {
         confirmation.isSelected = s.confirmBeforeSending
     }
 
-    override fun disposeUIResources() { panel = null }
+    override fun disposeUIResources() {
+        panel = null
+    }
 }

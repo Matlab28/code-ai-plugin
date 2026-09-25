@@ -10,7 +10,7 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
-import java.util.UUID
+import java.util.*
 
 class CodeAiApiClient {
     private val mapper = ObjectMapper()
@@ -27,8 +27,9 @@ class CodeAiApiClient {
 
     fun testConnection(): String {
         val base = CodeAiSettings.getInstance().state.serverUrl.trimEnd('/')
-        val request = requestBuilder(URI.create(base + if (CodeAiSettings.getInstance().state.providerMode == ProviderMode.OPENAI_COMPATIBLE) "/v1/models" else "/actuator/health"))
-            .GET().build()
+        val request =
+            requestBuilder(URI.create(base + if (CodeAiSettings.getInstance().state.providerMode == ProviderMode.OPENAI_COMPATIBLE) "/v1/models" else "/actuator/health"))
+                .GET().build()
         val response = http.send(request, HttpResponse.BodyHandlers.ofString())
         if (response.statusCode() !in 200..299) error("HTTP ${response.statusCode()}")
         return "Connection successful (HTTP ${response.statusCode()})"
@@ -39,19 +40,32 @@ class CodeAiApiClient {
             "project" to mapOf("name" to projectName, "language" to "JAVA"),
             "reviewScope" to "UNCOMMITTED_CHANGES",
             "reviewType" to mode.name,
-            "files" to files.map { mapOf("path" to it.path, "changeType" to it.changeType.name, "diff" to it.diff, "context" to it.context) },
+            "files" to files.map {
+                mapOf(
+                    "path" to it.path,
+                    "changeType" to it.changeType.name,
+                    "diff" to it.diff,
+                    "context" to it.context
+                )
+            },
         )
         val root = post("/api/v1/reviews", mapper.writeValueAsString(body))
         val findings = root.path("findings").mapIndexed { index, node -> finding(node, index) }
         val explanation = root.path("markdownExplanation").asText(root.path("text").asText())
-        return response(root.path("summary").path("filesReviewed").asInt(files.size), findings, root.path("reviewId").asText(), explanation)
+        return response(
+            root.path("summary").path("filesReviewed").asInt(files.size),
+            findings,
+            root.path("reviewId").asText(),
+            explanation
+        )
     }
 
     private fun legacy(files: List<ChangedFile>, mode: ReviewMode): ReviewResponse {
-        val findings = mutableListOf<ReviewFinding>()
-        val explanations = mutableListOf<String>()
+        var findings = mutableListOf<ReviewFinding>()
+        var explanations = mutableListOf<String>()
         files.forEach { file ->
-            val root = post("/api/review", mapper.writeValueAsString(mapOf("code" to file.context, "reviewType" to mode.name)))
+            val root =
+                post("/api/review", mapper.writeValueAsString(mapOf("code" to file.context, "reviewType" to mode.name)))
             root.path("issues").forEachIndexed { index, issue -> findings += legacyFinding(issue, file.path, index) }
             root.path("markdownExplanation").asText().takeIf(String::isNotBlank)?.let {
                 explanations += "${file.path}\n\n$it"
@@ -71,7 +85,10 @@ class CodeAiApiClient {
             "model" to s.model,
             "temperature" to 0.1,
             "messages" to listOf(
-                mapOf("role" to "system", "content" to "You are an expert Java, Spring Boot, Kotlin, and secure-code reviewer."),
+                mapOf(
+                    "role" to "system",
+                    "content" to "You are an expert Java, Spring Boot, Kotlin, and secure-code reviewer."
+                ),
                 mapOf("role" to "user", "content" to prompt),
             ),
         )
@@ -107,12 +124,14 @@ class CodeAiApiClient {
 
             $changes
         """.trimIndent()
+
         ReviewMode.EXPLAIN -> """
             Explain these uncommitted changes clearly. Organize the response into: Summary, Behavior Changes,
             File-by-File Explanation, Important Design Decisions, and Risks. Be precise and developer-focused.
 
             $changes
         """.trimIndent()
+
         else -> error("${mode.name} is not a text review mode")
     }
 
@@ -139,7 +158,11 @@ class CodeAiApiClient {
             .header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofString(json)).build()
         val response = http.send(request, HttpResponse.BodyHandlers.ofString())
-        if (response.statusCode() !in 200..299) error("CodeAI returned HTTP ${response.statusCode()}: ${response.body().take(300)}")
+        if (response.statusCode() !in 200..299) error(
+            "CodeAI returned HTTP ${response.statusCode()}: ${
+                response.body().take(300)
+            }"
+        )
         return mapper.readTree(response.body())
     }
 
@@ -155,7 +178,9 @@ class CodeAiApiClient {
 
     private fun legacyFinding(n: JsonNode, path: String, index: Int) = ReviewFinding(
         id = "legacy-$index", file = n.path("filePath").asText(path), startLine = n.path("lineNumber").asInt(1),
-        severity = when (n.path("severity").asText().uppercase()) { "ERROR" -> ReviewSeverity.HIGH; "WARNING" -> ReviewSeverity.MEDIUM; else -> ReviewSeverity.INFO },
+        severity = when (n.path("severity").asText().uppercase()) {
+            "ERROR" -> ReviewSeverity.HIGH; "WARNING" -> ReviewSeverity.MEDIUM; else -> ReviewSeverity.INFO
+        },
         title = n.path("issueDescription").asText("Code review finding").take(100),
         description = n.path("issueDescription").asText(), codeSnippet = n.path("codeSnippet").asText(),
         suggestion = n.path("suggestion").asText(),
@@ -171,7 +196,8 @@ class CodeAiApiClient {
         suggestion = n.path("suggestion").asText(), confidence = n.path("confidence").asDouble(1.0),
     )
 
-    private inline fun <reified T : Enum<T>> enumValue(value: String, fallback: T): T = enumValues<T>().firstOrNull { it.name == value.uppercase() } ?: fallback
+    private inline fun <reified T : Enum<T>> enumValue(value: String, fallback: T): T =
+        enumValues<T>().firstOrNull { it.name == value.uppercase() } ?: fallback
 
     private fun normalize(response: ReviewResponse): ReviewResponse {
         val minimum = CodeAiSettings.getInstance().state.minimumSeverity.ordinal
@@ -185,8 +211,14 @@ class CodeAiApiClient {
         id: String = UUID.randomUUID().toString(),
         explanation: String = "",
     ): ReviewResponse = ReviewResponse(
-        id, ReviewSummary(files, findings.size, findings.count { it.severity == ReviewSeverity.CRITICAL },
-            findings.count { it.severity == ReviewSeverity.HIGH }, findings.count { it.severity == ReviewSeverity.MEDIUM },
-            findings.count { it.severity == ReviewSeverity.LOW }), findings, explanation,
+        id,
+        ReviewSummary(
+            files,
+            findings.size,
+            findings.count { it.severity == ReviewSeverity.CRITICAL },
+            findings.count { it.severity == ReviewSeverity.HIGH },
+            findings.count { it.severity == ReviewSeverity.MEDIUM },
+            findings.count { it.severity == ReviewSeverity.LOW }),
+        findings, explanation,
     )
 }

@@ -23,7 +23,13 @@ class ChangeCollector {
                     .replace('\\', '/')
                 val old = change.beforeRevision?.content.orEmpty()
                 val new = change.afterRevision?.content.orEmpty()
-                if (ReviewFilters.shouldExclude(project, path, new.ifBlank { old }, settings.detectSecrets)) return@mapNotNull null
+                if (ReviewFilters.shouldExclude(
+                        project,
+                        path,
+                        new.ifBlank { old },
+                        settings.detectSecrets
+                    )
+                ) return@mapNotNull null
                 val type = when (change.fileStatus) {
                     FileStatus.ADDED -> ChangeType.ADDED
                     FileStatus.DELETED -> ChangeType.DELETED

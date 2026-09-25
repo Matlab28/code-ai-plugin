@@ -27,8 +27,8 @@ object ReviewFilters {
 
     fun isSensitive(path: String, content: String, scanSecrets: Boolean = true): Boolean =
         sensitiveNames.any { it.containsMatchIn(path) } ||
-            path.contains("/build/") || path.contains("/target/") || path.endsWith(".class") || path.endsWith(".jar") ||
-            (scanSecrets && secretContent.any { it.containsMatchIn(content) })
+                path.contains("/build/") || path.contains("/target/") || path.endsWith(".class") || path.endsWith(".jar") ||
+                (scanSecrets && secretContent.any { it.containsMatchIn(content) })
 
     private fun matchesIgnoreFile(project: Project, relativePath: String): Boolean {
         val base = project.basePath ?: return false
@@ -42,7 +42,7 @@ object ReviewFilters {
                     val glob = if (clean.endsWith("/")) "${clean}**" else clean
                     val matcher = FileSystems.getDefault().getPathMatcher("glob:$glob")
                     matcher.matches(Path.of(relativePath)) || (!glob.startsWith("**/") &&
-                        FileSystems.getDefault().getPathMatcher("glob:**/$glob").matches(Path.of(relativePath)))
+                            FileSystems.getDefault().getPathMatcher("glob:**/$glob").matches(Path.of(relativePath)))
                 }
         }.getOrDefault(false)
     }

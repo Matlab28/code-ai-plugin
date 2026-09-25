@@ -25,7 +25,9 @@ class CodeAiSettings : PersistentStateComponent<CodeAiSettings.State> {
 
     private var state = State()
     override fun getState() = state
-    override fun loadState(state: State) { this.state = state }
+    override fun loadState(state: State) {
+        this.state = state
+    }
 
     companion object {
         fun getInstance(): CodeAiSettings = ApplicationManager.getApplication().getService(CodeAiSettings::class.java)

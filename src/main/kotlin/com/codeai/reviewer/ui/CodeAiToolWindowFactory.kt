@@ -1,10 +1,6 @@
 package com.codeai.reviewer.ui
 
-import com.codeai.reviewer.model.ReviewFinding
-import com.codeai.reviewer.model.ReviewMode
-import com.codeai.reviewer.model.ReviewResponse
-import com.codeai.reviewer.model.ReviewSeverity
-import com.codeai.reviewer.model.ReviewStatus
+import com.codeai.reviewer.model.*
 import com.codeai.reviewer.service.ReviewService
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
@@ -20,26 +16,9 @@ import com.intellij.ui.components.JBPanel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.content.ContentFactory
 import com.intellij.util.ui.JBUI
-import java.awt.BorderLayout
-import java.awt.Color
-import java.awt.Component
-import java.awt.Dimension
-import java.awt.FlowLayout
-import java.awt.GridLayout
-import java.awt.Rectangle
-import java.awt.Toolkit
+import java.awt.*
 import java.awt.datatransfer.StringSelection
-import javax.swing.Box
-import javax.swing.BoxLayout
-import javax.swing.ButtonGroup
-import javax.swing.JButton
-import javax.swing.JComponent
-import javax.swing.JEditorPane
-import javax.swing.JPanel
-import javax.swing.JToggleButton
-import javax.swing.ScrollPaneConstants
-import javax.swing.Scrollable
-import javax.swing.UIManager
+import javax.swing.*
 
 class CodeAiToolWindowFactory : ToolWindowFactory {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
@@ -95,7 +74,7 @@ private class CodeAiPanel(private val project: Project) : JBPanel<CodeAiPanel>(B
                     renderSelectedMode()
                     val hasResult = latestState.responses.containsKey(mode) || latestState.errors.containsKey(mode)
                     val busy = latestState.status == ReviewStatus.COLLECTING_CHANGES ||
-                        latestState.status == ReviewStatus.REVIEWING
+                            latestState.status == ReviewStatus.REVIEWING
                     if (!hasResult && !busy) reviewService.reviewChanges(mode)
                 }
             }
@@ -135,20 +114,24 @@ private class CodeAiPanel(private val project: Project) : JBPanel<CodeAiPanel>(B
     }
 
     private fun addEmptyState() {
-        results.add(infoPanel(
-            "${selectedMode.displayName} review",
-            when (selectedMode) {
-                ReviewMode.GENERAL -> "Find correctness, API design, maintainability, database, and error-handling issues."
-                ReviewMode.SECURITY -> "Find injection, authentication, authorization, secret, and data-exposure risks."
-                ReviewMode.PERFORMANCE -> "Find inefficient queries, blocking calls, memory, concurrency, and scalability issues."
-                ReviewMode.TESTS -> "Generate focused unit and integration test scenarios with useful code examples."
-                ReviewMode.EXPLAIN -> "Explain what changed, why it matters, and the important risks and design decisions."
-            },
-            "Click ${selectedMode.displayName} above to run this review, or Run All for every section.",
-        ))
+        results.add(
+            infoPanel(
+                "${selectedMode.displayName} review",
+                when (selectedMode) {
+                    ReviewMode.GENERAL -> "Find correctness, API design, maintainability, database, and error-handling issues."
+                    ReviewMode.SECURITY -> "Find injection, authentication, authorization, secret, and data-exposure risks."
+                    ReviewMode.PERFORMANCE -> "Find inefficient queries, blocking calls, memory, concurrency, and scalability issues."
+                    ReviewMode.TESTS -> "Generate focused unit and integration test scenarios with useful code examples."
+                    ReviewMode.EXPLAIN -> "Explain what changed, why it matters, and the important risks and design decisions."
+                },
+                "Click ${selectedMode.displayName} above to run this review, or Run All for every section.",
+            )
+        )
     }
 
-    private fun addMessage(message: String) { results.add(infoPanel(message)) }
+    private fun addMessage(message: String) {
+        results.add(infoPanel(message))
+    }
 
     private fun addError(message: String) {
         results.add(infoPanel("${selectedMode.displayName} review failed", message).apply {
@@ -157,10 +140,20 @@ private class CodeAiPanel(private val project: Project) : JBPanel<CodeAiPanel>(B
     }
 
     private fun renderFindings(response: ReviewResponse) {
-        results.add(sectionHeader("Review Results", "Found ${response.findings.size} issue${if (response.findings.size == 1) "" else "s"}"))
+        results.add(
+            sectionHeader(
+                "Review Results",
+                "Found ${response.findings.size} issue${if (response.findings.size == 1) "" else "s"}"
+            )
+        )
         results.add(Box.createVerticalStrut(12))
         if (response.findings.isEmpty()) {
-            results.add(infoPanel("No actionable findings", "Nothing matched the configured severity and confidence thresholds."))
+            results.add(
+                infoPanel(
+                    "No actionable findings",
+                    "Nothing matched the configured severity and confidence thresholds."
+                )
+            )
             return
         }
         response.findings.forEachIndexed { index, finding ->
@@ -179,7 +172,10 @@ private class CodeAiPanel(private val project: Project) : JBPanel<CodeAiPanel>(B
                 JBUI.Borders.customLine(JBColor.border()),
                 JBUI.Borders.empty(18),
             )
-            add(htmlPane(MarkdownRenderer.toHtml(response.markdownExplanation.ifBlank { "No response was returned." })), BorderLayout.CENTER)
+            add(
+                htmlPane(MarkdownRenderer.toHtml(response.markdownExplanation.ifBlank { "No response was returned." })),
+                BorderLayout.CENTER
+            )
         })
     }
 
@@ -199,14 +195,24 @@ private class CodeAiPanel(private val project: Project) : JBPanel<CodeAiPanel>(B
             add(severityIcon(finding.severity), BorderLayout.WEST)
             add(JPanel(BorderLayout(4, 5)).apply {
                 add(htmlPane("<b>${MarkdownRenderer.inline(finding.title)}</b>"), BorderLayout.CENTER)
-                add(JBLabel("${shortFile(finding.file)}    Line ${finding.startLine}    ${finding.category.name.replace('_', ' ')}"), BorderLayout.SOUTH)
+                add(
+                    JBLabel(
+                        "${shortFile(finding.file)}    Line ${finding.startLine}    ${
+                            finding.category.name.replace(
+                                '_',
+                                ' '
+                            )
+                        }"
+                    ), BorderLayout.SOUTH
+                )
             }, BorderLayout.CENTER)
             add(severityBadge(finding.severity), BorderLayout.EAST)
         }, BorderLayout.NORTH)
 
         add(JPanel().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
-            border = JBUI.Borders.compound(JBUI.Borders.customLine(JBColor.border(), 1, 0, 0, 0), JBUI.Borders.empty(12))
+            border =
+                JBUI.Borders.compound(JBUI.Borders.customLine(JBColor.border(), 1, 0, 0, 0), JBUI.Borders.empty(12))
             if (finding.description.isNotBlank()) {
                 add(sectionLabel("DETAILS"))
                 add(htmlPane(MarkdownRenderer.toHtml(finding.description)))
@@ -264,11 +270,13 @@ private class CodeAiPanel(private val project: Project) : JBPanel<CodeAiPanel>(B
         font = font.deriveFont(java.awt.Font.BOLD)
     }
 
-    private fun severityIcon(severity: ReviewSeverity) = JBLabel(when (severity) {
-        ReviewSeverity.CRITICAL, ReviewSeverity.HIGH -> "✕"
-        ReviewSeverity.MEDIUM -> "⚠"
-        ReviewSeverity.LOW, ReviewSeverity.INFO -> "ⓘ"
-    }).apply {
+    private fun severityIcon(severity: ReviewSeverity) = JBLabel(
+        when (severity) {
+            ReviewSeverity.CRITICAL, ReviewSeverity.HIGH -> "✕"
+            ReviewSeverity.MEDIUM -> "⚠"
+            ReviewSeverity.LOW, ReviewSeverity.INFO -> "ⓘ"
+        }
+    ).apply {
         foreground = severityColor(severity)
         font = font.deriveFont(java.awt.Font.BOLD, font.size2D + 4f)
     }
@@ -281,12 +289,12 @@ private class CodeAiPanel(private val project: Project) : JBPanel<CodeAiPanel>(B
     }
 
     private fun severityColor(severity: ReviewSeverity): Color = when (severity) {
-            ReviewSeverity.CRITICAL -> JBColor(ColorValue(0xB71C1C), ColorValue(0xD32F2F))
-            ReviewSeverity.HIGH -> JBColor(ColorValue(0xD84315), ColorValue(0xE64A19))
-            ReviewSeverity.MEDIUM -> JBColor(ColorValue(0xB26A00), ColorValue(0xC77C00))
-            ReviewSeverity.LOW -> JBColor(ColorValue(0x2E7D32), ColorValue(0x388E3C))
-            ReviewSeverity.INFO -> JBColor(ColorValue(0x1565C0), ColorValue(0x1976D2))
-        }
+        ReviewSeverity.CRITICAL -> JBColor(ColorValue(0xB71C1C), ColorValue(0xD32F2F))
+        ReviewSeverity.HIGH -> JBColor(ColorValue(0xD84315), ColorValue(0xE64A19))
+        ReviewSeverity.MEDIUM -> JBColor(ColorValue(0xB26A00), ColorValue(0xC77C00))
+        ReviewSeverity.LOW -> JBColor(ColorValue(0x2E7D32), ColorValue(0x388E3C))
+        ReviewSeverity.INFO -> JBColor(ColorValue(0x1565C0), ColorValue(0x1976D2))
+    }
 
     private fun modeButtonText(mode: ReviewMode) = when (mode) {
         ReviewMode.GENERAL -> "◫ General"
@@ -352,7 +360,9 @@ private class ResponsiveColumnPanel : JPanel(), Scrollable {
 
     override fun getPreferredScrollableViewportSize() = Dimension(520, 600)
     override fun getScrollableUnitIncrement(visibleRect: Rectangle, orientation: Int, direction: Int) = 18
-    override fun getScrollableBlockIncrement(visibleRect: Rectangle, orientation: Int, direction: Int) = visibleRect.height - 36
+    override fun getScrollableBlockIncrement(visibleRect: Rectangle, orientation: Int, direction: Int) =
+        visibleRect.height - 36
+
     override fun getScrollableTracksViewportWidth() = true
     override fun getScrollableTracksViewportHeight() = false
 }
